@@ -24,14 +24,12 @@ namespace ptpwn
 
         static void DoMagic(IntPtr handle)
         {
-            // don't jump: jz -> jnz
-            WriteMemory(handle, new IntPtr(0x00C78633), new byte[] { 0x0F, 0x85 });
+            //jump to 0x00C78726 immediately to skip all of the checks and warnings
 
-            // don't jump: jz -> jnz
-            WriteMemory(handle, new IntPtr(0x00C786AB), 0x75);
-
-            //jump to 0x00C78880 to save the name but skip resetting progress
-            WriteMemory(handle, new IntPtr(0x00C78726), new byte[] { 0xE9, 0x55, 0x01, 0x00, 0x00 });
+            //dist: 
+            //0x00C78726 - 0x00C78633 = 0x24D
+            //0x24D - 0x5 (len of jmp rel32) = 0x248
+            WriteMemory(handle, new IntPtr(0x00C78633), new byte[] { 0xE9, 0x48, 0x02, 0x00, 0x00 });
         }
 
         static byte[] ReadMemory(IntPtr process, IntPtr address, uint length)
