@@ -1,11 +1,26 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace ptpwn
 {
     class Program
     {
+        static PacketTracer _version62 = new PacketTracer
+        (
+            new IntPtr(0x0281F628),
+            new IntPtr(0x00C78633),
+            "6.2.0.0052"
+        );
+
+        static PacketTracer _version63 = new PacketTracer
+        (
+            new IntPtr(0x02D97670),
+            new IntPtr(0x00C823C3),
+            "6.3.0.0009"
+        );
+
         static void Main(string[] args)
         {
             foreach (var process in Process.GetProcesses())
@@ -14,22 +29,47 @@ namespace ptpwn
                     continue;
 
                 var ptr = NativeMethods.OpenProcess(0x001F0FFF, true, process.Id);
-
                 if (ptr == IntPtr.Zero)
                     Die();
 
-                DoMagic(ptr);
+                var version = ReadVersion(ptr);
+                if (version == null)
+                    Die("unknown packet tracer version");
+
+                DoMagic(ptr, version.TargetPtr);
             }
         }
 
-        static void DoMagic(IntPtr handle)
+        static void DoMagic(IntPtr handle, IntPtr target)
         {
-            //jump to 0x00C78726 immediately to skip all of the checks and warnings
+            //jump to 0x00C78726 or 0x00C824B6 immediately to skip all of the checks and warnings
 
-            //dist: 
-            //0x00C78726 - 0x00C78633 = 0x24D
+            //dist:
+            //(0x00C78726 or 0x00C824B6) - target = 0x24D
             //0x24D - 0x5 (len of jmp rel32) = 0x248
-            WriteMemory(handle, new IntPtr(0x00C78633), new byte[] { 0xE9, 0x48, 0x02, 0x00, 0x00 });
+            WriteMemory(handle, target, new byte[] { 0xE9, 0x48, 0x02, 0x00, 0x00 });
+        }
+
+        static PacketTracer ReadVersion(IntPtr process)
+        {
+            byte[] version62Bytes = ReadMemory(process, _version62.VersionPtr, (uint)_version62.ToString().Length);
+            byte[] version63Bytes = ReadMemory(process, _version63.VersionPtr, (uint)_version63.ToString().Length);
+
+            try
+            {
+                if (Encoding.ASCII.GetString(version62Bytes) == _version62.ToString())
+                    return _version62;
+            }
+            catch { }
+
+            try
+            {
+                if (Encoding.ASCII.GetString(version63Bytes) == _version63.ToString())
+                    return _version63;
+            }
+            catch { }
+
+            return null;
         }
 
         static byte[] ReadMemory(IntPtr process, IntPtr address, uint length)
@@ -71,7 +111,7 @@ namespace ptpwn
             throw new Exception(message);
         }
     }
-    
+
     static class NativeMethods
     {
         [DllImport("kernel32.dll", SetLastError = true)]
@@ -82,5 +122,25 @@ namespace ptpwn
 
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern IntPtr OpenProcess(uint access, bool inheritHandle, int processId);
+    }
+
+    class PacketTracer
+    {
+        public readonly IntPtr VersionPtr;
+        public readonly IntPtr TargetPtr;
+
+        private string _version;
+
+        public PacketTracer(IntPtr versionPtr, IntPtr targetPtr, string versionString)
+        {
+            VersionPtr = versionPtr;
+            TargetPtr = targetPtr;
+            _version = versionString;
+        }
+
+        public override string ToString()
+        {
+            return _version;
+        }
     }
 }
